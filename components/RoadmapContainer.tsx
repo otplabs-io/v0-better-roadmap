@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useMemo } from "react"
 import type {
   Roadmap,
   RoadmapItem,
@@ -9,6 +9,7 @@ import type {
   ZoomLevel,
 } from "@/types/roadmap"
 import { createInitialData } from "@/lib/initialData"
+import { computeSwimlaneLayout } from "@/lib/layoutUtils"
 import { TimelineHeader } from "./TimelineHeader"
 import { LeftSidebar } from "./LeftSidebar"
 import { MainCanvas } from "./MainCanvas"
@@ -23,6 +24,14 @@ export function RoadmapContainer() {
 
   const selectedItem = roadmap.items.find((i) => i.id === selectedItemId) ?? null
   const selectedMilestone = roadmap.milestones.find((m) => m.id === selectedMilestoneId) ?? null
+
+  // Compute swimlane heights for sidebar alignment
+  const swimlaneHeights = useMemo(() => {
+    return roadmap.swimlanes.map((sw) => {
+      const layout = computeSwimlaneLayout(roadmap.items, sw.id, roadmap.startDate, zoom)
+      return layout.height
+    })
+  }, [roadmap.swimlanes, roadmap.items, roadmap.startDate, zoom])
 
   const handleSelectItem = useCallback((id: string | null) => {
     setSelectedItemId(id)
@@ -49,7 +58,8 @@ export function RoadmapContainer() {
   const handleDeleteItem = useCallback((id: string) => {
     setRoadmap((prev) => ({
       ...prev,
-      items: prev.items.filter((i) => i.id !== id),
+      // Also delete any sub-items of this item
+      items: prev.items.filter((i) => i.id !== id && i.parentId !== id),
     }))
     setSelectedItemId(null)
   }, [])
@@ -87,6 +97,8 @@ export function RoadmapContainer() {
         endDate,
         swimlaneId,
         color: "#3b82f6",
+        percentComplete: 0,
+        parentId: null,
       }
       setRoadmap((prev) => ({
         ...prev,
@@ -94,6 +106,38 @@ export function RoadmapContainer() {
       }))
       setSelectedItemId(newItem.id)
       setSelectedMilestoneId(null)
+    },
+    []
+  )
+
+  const handleAddSubItem = useCallback(
+    (parentId: string) => {
+      setRoadmap((prev) => {
+        const parent = prev.items.find((i) => i.id === parentId)
+        if (!parent) return prev
+
+        // Sub-item spans the first third of the parent by default
+        const parentDuration = parent.endDate.getTime() - parent.startDate.getTime()
+        const subEnd = new Date(parent.startDate.getTime() + parentDuration / 3)
+
+        const newSubItem: RoadmapItem = {
+          id: `sub-${Date.now()}`,
+          title: "New Phase",
+          description: "",
+          owner: parent.owner,
+          status: "Planned",
+          startDate: new Date(parent.startDate),
+          endDate: subEnd,
+          swimlaneId: parent.swimlaneId,
+          color: lightenColor(parent.color),
+          percentComplete: 0,
+          parentId,
+        }
+        return {
+          ...prev,
+          items: [...prev.items, newSubItem],
+        }
+      })
     },
     []
   )
@@ -162,6 +206,7 @@ export function RoadmapContainer() {
       <div className="flex flex-1 overflow-hidden">
         <LeftSidebar
           swimlanes={roadmap.swimlanes}
+          swimlaneHeights={swimlaneHeights}
           onAddSwimlane={handleAddSwimlane}
           onAddItem={handleAddItem}
           onUpdateSwimlane={handleUpdateSwimlane}
@@ -183,14 +228,27 @@ export function RoadmapContainer() {
             item={selectedItem}
             milestone={selectedMilestone}
             swimlanes={roadmap.swimlanes}
+            allItems={roadmap.items}
             onUpdateItem={handleUpdateItem}
             onDeleteItem={handleDeleteItem}
             onUpdateMilestone={handleUpdateMilestone}
             onDeleteMilestone={handleDeleteMilestone}
+            onAddSubItem={handleAddSubItem}
             onClose={handleDeselectAll}
           />
         )}
       </div>
     </div>
   )
+}
+
+/**
+ * Lighten a hex color slightly for sub-items
+ */
+function lightenColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const lighten = (c: number) => Math.min(255, Math.round(c + (255 - c) * 0.35))
+  return `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`
 }

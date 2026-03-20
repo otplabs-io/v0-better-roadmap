@@ -16,6 +16,8 @@ export interface RoadmapItem {
   endDate: Date
   swimlaneId: string
   color: string
+  percentComplete: number
+  parentId?: string | null
 }
 
 export interface Milestone {

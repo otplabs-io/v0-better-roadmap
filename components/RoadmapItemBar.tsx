@@ -5,13 +5,13 @@ import type { RoadmapItem, Swimlane, ZoomLevel } from "@/types/roadmap"
 import { pixelToDate, ZOOM_CONFIG } from "@/lib/timelineUtils"
 import { cn } from "@/lib/utils"
 
-const ITEM_PADDING_TOP = 8
-const ITEM_HEIGHT = 36
-
 interface RoadmapItemBarProps {
   item: RoadmapItem
   left: number
   width: number
+  top: number
+  height: number
+  isSubItem: boolean
   isSelected: boolean
   onSelect: () => void
   onUpdate: (item: RoadmapItem) => void
@@ -29,6 +29,9 @@ export function RoadmapItemBar({
   item,
   left,
   width,
+  top,
+  height,
+  isSubItem,
   isSelected,
   onSelect,
   onUpdate,
@@ -48,6 +51,7 @@ export function RoadmapItemBar({
   })
 
   const statusDot = getStatusColor(item.status)
+  const statusLabel = getStatusShort(item.status)
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, mode: DragMode) => {
@@ -87,23 +91,31 @@ export function RoadmapItemBar({
         const newEndDate = new Date(newStartDate)
         newEndDate.setDate(newEndDate.getDate() + durationDays)
 
-        // Calculate swimlane change
-        const laneDelta = Math.round(dy / swimlaneHeight)
-        const newLaneIndex = Math.max(
-          0,
-          Math.min(
-            swimlanes.length - 1,
-            dragRef.current.origSwimlaneIndex + laneDelta
+        // Calculate swimlane change (only for parent items)
+        if (!isSubItem) {
+          const laneDelta = Math.round(dy / swimlaneHeight)
+          const newLaneIndex = Math.max(
+            0,
+            Math.min(
+              swimlanes.length - 1,
+              dragRef.current.origSwimlaneIndex + laneDelta
+            )
           )
-        )
-        const newSwimlaneId = swimlanes[newLaneIndex].id
+          const newSwimlaneId = swimlanes[newLaneIndex].id
 
-        onUpdate({
-          ...item,
-          startDate: newStartDate,
-          endDate: newEndDate,
-          swimlaneId: newSwimlaneId,
-        })
+          onUpdate({
+            ...item,
+            startDate: newStartDate,
+            endDate: newEndDate,
+            swimlaneId: newSwimlaneId,
+          })
+        } else {
+          onUpdate({
+            ...item,
+            startDate: newStartDate,
+            endDate: newEndDate,
+          })
+        }
       } else if (dragMode === "resize-left") {
         const newLeft = dragRef.current.origLeft + dx
         const newStartDate = pixelToDate(newLeft, timelineStart, zoom)
@@ -122,17 +134,22 @@ export function RoadmapItemBar({
         }
       }
     },
-    [dragMode, zoom, timelineStart, swimlaneHeight, swimlanes, item, onUpdate]
+    [dragMode, zoom, timelineStart, swimlaneHeight, swimlanes, item, onUpdate, isSubItem]
   )
 
   const handlePointerUp = useCallback(() => {
     setDragMode(null)
   }, [])
 
+  const barFontSize = isSubItem ? "text-[9px]" : "text-xs"
+  const barRounding = isSubItem ? "rounded" : "rounded-md"
+
   return (
     <div
       className={cn(
-        "absolute flex cursor-grab items-center gap-1.5 rounded-md px-2 text-xs font-medium shadow-sm transition-shadow select-none",
+        "absolute flex cursor-grab items-center gap-1 px-1.5 font-medium shadow-sm transition-shadow select-none",
+        barRounding,
+        barFontSize,
         isSelected
           ? "ring-2 ring-primary ring-offset-1 ring-offset-background shadow-md"
           : "hover:shadow-md",
@@ -140,9 +157,9 @@ export function RoadmapItemBar({
       )}
       style={{
         left,
-        top: ITEM_PADDING_TOP,
+        top,
         width,
-        height: ITEM_HEIGHT,
+        height,
         backgroundColor: item.color,
         color: getContrastText(item.color),
       }}
@@ -155,11 +172,14 @@ export function RoadmapItemBar({
       onPointerUp={handlePointerUp}
       role="button"
       tabIndex={0}
-      aria-label={`${item.title}, ${item.status}`}
+      aria-label={`${item.title}, ${item.status}, ${item.percentComplete}% complete`}
     >
       {/* Left resize handle */}
       <div
-        className="absolute left-0 top-0 z-10 h-full w-2 cursor-col-resize rounded-l-md opacity-0 transition-opacity hover:opacity-100"
+        className={cn(
+          "absolute left-0 top-0 z-10 h-full w-2 cursor-col-resize opacity-0 transition-opacity hover:opacity-100",
+          isSubItem ? "rounded-l" : "rounded-l-md"
+        )}
         style={{ backgroundColor: "rgba(0,0,0,0.15)" }}
         onPointerDown={(e) => {
           e.stopPropagation()
@@ -169,16 +189,25 @@ export function RoadmapItemBar({
         onPointerUp={handlePointerUp}
       />
 
-      {/* Content */}
+      {/* Content: status dot + title on left, status label + (%) on right */}
       <span
-        className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
+        className={cn(
+          "inline-block flex-shrink-0 rounded-full",
+          isSubItem ? "h-1.5 w-1.5" : "h-2 w-2"
+        )}
         style={{ backgroundColor: statusDot }}
       />
-      <span className="truncate">{item.title}</span>
+      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      <span className="ml-auto flex-shrink-0 whitespace-nowrap opacity-80">
+        {statusLabel} ({item.percentComplete}%)
+      </span>
 
       {/* Right resize handle */}
       <div
-        className="absolute right-0 top-0 z-10 h-full w-2 cursor-col-resize rounded-r-md opacity-0 transition-opacity hover:opacity-100"
+        className={cn(
+          "absolute right-0 top-0 z-10 h-full w-2 cursor-col-resize opacity-0 transition-opacity hover:opacity-100",
+          isSubItem ? "rounded-r" : "rounded-r-md"
+        )}
         style={{ backgroundColor: "rgba(0,0,0,0.15)" }}
         onPointerDown={(e) => {
           e.stopPropagation()
@@ -204,6 +233,15 @@ function getStatusColor(status: string): string {
     case "Idea":
     default:
       return "#94a3b8"
+  }
+}
+
+function getStatusShort(status: string): string {
+  switch (status) {
+    case "In Progress":
+      return "In Prog"
+    default:
+      return status
   }
 }
 

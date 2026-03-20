@@ -13,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Trash2, X } from "lucide-react"
+import { Trash2, X, Plus } from "lucide-react"
 import { format } from "date-fns"
+import { Slider } from "@/components/ui/slider"
 
 const STATUSES: ItemStatus[] = ["Idea", "Planned", "In Progress", "Blocked", "Done"]
 
@@ -33,10 +34,12 @@ interface RightPanelProps {
   item: RoadmapItem | null
   milestone: Milestone | null
   swimlanes: Swimlane[]
+  allItems: RoadmapItem[]
   onUpdateItem: (item: RoadmapItem) => void
   onDeleteItem: (id: string) => void
   onUpdateMilestone: (milestone: Milestone) => void
   onDeleteMilestone: (id: string) => void
+  onAddSubItem: (parentId: string) => void
   onClose: () => void
 }
 
@@ -44,10 +47,12 @@ export function RightPanel({
   item,
   milestone,
   swimlanes,
+  allItems,
   onUpdateItem,
   onDeleteItem,
   onUpdateMilestone,
   onDeleteMilestone,
+  onAddSubItem,
   onClose,
 }: RightPanelProps) {
   useEffect(() => {
@@ -58,11 +63,19 @@ export function RightPanel({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [onClose])
 
+  const isSubItem = item?.parentId != null
+  const subItems = item ? allItems.filter((i) => i.parentId === item.id) : []
+  const parentItem = item?.parentId ? allItems.find((i) => i.id === item.parentId) : null
+
   return (
     <div className="w-80 flex-shrink-0 overflow-y-auto border-l border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-foreground">
-          {item ? "Edit Item" : "Edit Milestone"}
+          {item
+            ? isSubItem
+              ? "Edit Sub-Item"
+              : "Edit Item"
+            : "Edit Milestone"}
         </h2>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -75,8 +88,12 @@ export function RightPanel({
           <ItemEditor
             item={item}
             swimlanes={swimlanes}
+            subItems={subItems}
+            parentItem={parentItem ?? null}
+            isSubItem={isSubItem}
             onUpdate={onUpdateItem}
             onDelete={() => onDeleteItem(item.id)}
+            onAddSubItem={() => onAddSubItem(item.id)}
           />
         )}
         {milestone && (
@@ -94,16 +111,30 @@ export function RightPanel({
 function ItemEditor({
   item,
   swimlanes,
+  subItems,
+  parentItem,
+  isSubItem,
   onUpdate,
   onDelete,
+  onAddSubItem,
 }: {
   item: RoadmapItem
   swimlanes: Swimlane[]
+  subItems: RoadmapItem[]
+  parentItem: RoadmapItem | null
+  isSubItem: boolean
   onUpdate: (item: RoadmapItem) => void
   onDelete: () => void
+  onAddSubItem: () => void
 }) {
   return (
     <>
+      {parentItem && (
+        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          Sub-item of <span className="font-medium text-foreground">{parentItem.title}</span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="item-title" className="text-xs text-muted-foreground">
           Title
@@ -158,23 +189,38 @@ function ItemEditor({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Swimlane</Label>
-        <Select
-          value={item.swimlaneId}
-          onValueChange={(v) => onUpdate({ ...item, swimlaneId: v })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {swimlanes.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs text-muted-foreground">
+          % Complete: {item.percentComplete}%
+        </Label>
+        <Slider
+          value={[item.percentComplete]}
+          onValueChange={([v]) => onUpdate({ ...item, percentComplete: v })}
+          max={100}
+          min={0}
+          step={5}
+        />
       </div>
+
+      {!isSubItem && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Swimlane</Label>
+          <Select
+            value={item.swimlaneId}
+            onValueChange={(v) => onUpdate({ ...item, swimlaneId: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {swimlanes.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
@@ -226,6 +272,47 @@ function ItemEditor({
         </div>
       </div>
 
+      {/* Sub-items section (only for parent items) */}
+      {!isSubItem && (
+        <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">Sub-Items (Phases)</Label>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs"
+              onClick={onAddSubItem}
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </Button>
+          </div>
+          {subItems.length === 0 ? (
+            <p className="text-xs text-muted-foreground/60">
+              No sub-items yet. Add phases to break this item into parts.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {subItems.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-xs"
+                >
+                  <span
+                    className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
+                    style={{ backgroundColor: sub.color }}
+                  />
+                  <span className="flex-1 truncate font-medium text-foreground">{sub.title}</span>
+                  <span className="flex-shrink-0 text-muted-foreground">
+                    {sub.percentComplete}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="border-t border-border pt-4">
         <Button
           variant="destructive"
@@ -234,7 +321,7 @@ function ItemEditor({
           className="w-full gap-1.5"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Delete Item
+          Delete {isSubItem ? "Sub-Item" : "Item"}
         </Button>
       </div>
     </>

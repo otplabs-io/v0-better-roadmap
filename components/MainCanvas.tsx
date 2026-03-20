@@ -1,12 +1,12 @@
 "use client"
 
-import { forwardRef, useCallback } from "react"
+import { forwardRef, useCallback, useMemo } from "react"
 import type { Roadmap, RoadmapItem, ZoomLevel } from "@/types/roadmap"
 import { getTimelineWidth, getGridLines, dateToPixel } from "@/lib/timelineUtils"
+import { computeSwimlaneLayout, type SwimlaneLayout } from "@/lib/layoutUtils"
 import { RoadmapItemBar } from "./RoadmapItemBar"
 import { MilestoneLine } from "./MilestoneLine"
 
-const SWIMLANE_HEIGHT = 100
 const HEADER_HEIGHT = 40
 
 interface MainCanvasProps {
@@ -36,7 +36,28 @@ export const MainCanvas = forwardRef<HTMLDivElement, MainCanvasProps>(
   ) {
     const timelineWidth = getTimelineWidth(roadmap.startDate, roadmap.endDate, zoom)
     const gridLines = getGridLines(roadmap.startDate, roadmap.endDate, zoom)
-    const totalHeight = roadmap.swimlanes.length * SWIMLANE_HEIGHT
+
+    // Compute per-swimlane stacked layouts
+    const swimlaneLayouts: SwimlaneLayout[] = useMemo(() => {
+      return roadmap.swimlanes.map((sw) =>
+        computeSwimlaneLayout(roadmap.items, sw.id, roadmap.startDate, zoom)
+      )
+    }, [roadmap.swimlanes, roadmap.items, roadmap.startDate, zoom])
+
+    // Compute cumulative y-offsets for each swimlane
+    const swimlaneOffsets = useMemo(() => {
+      const offsets: number[] = []
+      let acc = 0
+      for (const layout of swimlaneLayouts) {
+        offsets.push(acc)
+        acc += layout.height
+      }
+      return offsets
+    }, [swimlaneLayouts])
+
+    const totalHeight = useMemo(() => {
+      return swimlaneLayouts.reduce((sum, l) => sum + l.height, 0)
+    }, [swimlaneLayouts])
 
     const handleBackgroundClick = useCallback(
       (e: React.MouseEvent) => {
@@ -65,7 +86,9 @@ export const MainCanvas = forwardRef<HTMLDivElement, MainCanvasProps>(
                   className={`whitespace-nowrap text-[10px] ${
                     line.isMajor
                       ? "font-semibold text-foreground"
-                      : "font-normal text-muted-foreground"
+                      : line.isMonth
+                        ? "font-medium text-foreground/80"
+                        : "font-normal text-muted-foreground/60"
                   }`}
                   style={{ transform: "translateX(-50%)" }}
                 >
@@ -81,52 +104,54 @@ export const MainCanvas = forwardRef<HTMLDivElement, MainCanvasProps>(
             {gridLines.map((line, i) => (
               <div
                 key={`line-${i}`}
-                className={`absolute top-0 ${
-                  line.isMajor ? "border-l border-border" : "border-l border-border/40"
-                }`}
+                className="absolute top-0"
                 style={{
                   left: line.x,
                   height: totalHeight,
+                  borderLeft: line.isMajor
+                    ? "2px solid var(--border)"
+                    : line.isMonth
+                      ? "1.5px solid var(--border)"
+                      : "1px dashed color-mix(in oklch, var(--border) 50%, transparent)",
                 }}
               />
             ))}
 
-            {/* Swimlane rows */}
+            {/* Swimlane rows with stacked items */}
             {roadmap.swimlanes.map((swimlane, index) => {
-              const items = roadmap.items.filter(
-                (item) => item.swimlaneId === swimlane.id
-              )
+              const layout = swimlaneLayouts[index]
+              const yOffset = swimlaneOffsets[index]
+
               return (
                 <div
                   key={swimlane.id}
                   className="absolute left-0 right-0 border-b border-border"
                   style={{
-                    top: index * SWIMLANE_HEIGHT,
-                    height: SWIMLANE_HEIGHT,
+                    top: yOffset,
+                    height: layout.height,
                     backgroundColor: swimlane.color,
                   }}
                   onClick={handleBackgroundClick}
                 >
-                  {items.map((item) => {
-                    const left = dateToPixel(item.startDate, roadmap.startDate, zoom)
-                    const right = dateToPixel(item.endDate, roadmap.startDate, zoom)
-                    const width = Math.max(right - left, 20)
-
+                  {layout.items.map((layoutItem) => {
                     return (
                       <RoadmapItemBar
-                        key={item.id}
-                        item={item}
-                        left={left}
-                        width={width}
-                        isSelected={item.id === selectedItemId}
-                        onSelect={() => onSelectItem(item.id)}
+                        key={layoutItem.item.id}
+                        item={layoutItem.item}
+                        left={layoutItem.left}
+                        width={layoutItem.width}
+                        top={layoutItem.top}
+                        height={layoutItem.height}
+                        isSubItem={layoutItem.isSubItem}
+                        isSelected={layoutItem.item.id === selectedItemId}
+                        onSelect={() => onSelectItem(layoutItem.item.id)}
                         onUpdate={onUpdateItem}
                         timelineStart={roadmap.startDate}
                         timelineEnd={roadmap.endDate}
                         zoom={zoom}
                         swimlanes={roadmap.swimlanes}
                         swimlaneIndex={index}
-                        swimlaneHeight={SWIMLANE_HEIGHT}
+                        swimlaneHeight={layout.height}
                       />
                     )
                   })}

@@ -11,10 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-const SWIMLANE_HEIGHT = 100
-
 interface LeftSidebarProps {
   swimlanes: Swimlane[]
+  swimlaneHeights: number[]
   onAddSwimlane: () => void
   onAddItem: (swimlaneId: string) => void
   onUpdateSwimlane: (swimlane: Swimlane) => void
@@ -23,6 +22,7 @@ interface LeftSidebarProps {
 
 export function LeftSidebar({
   swimlanes,
+  swimlaneHeights,
   onAddSwimlane,
   onAddItem,
   onUpdateSwimlane,
@@ -48,10 +48,11 @@ export function LeftSidebar({
 
       {/* Swimlane labels */}
       <div className="flex-1 overflow-y-auto">
-        {swimlanes.map((swimlane) => (
+        {swimlanes.map((swimlane, index) => (
           <SwimlaneLabel
             key={swimlane.id}
             swimlane={swimlane}
+            height={swimlaneHeights[index] ?? 60}
             onAddItem={() => onAddItem(swimlane.id)}
             onUpdate={onUpdateSwimlane}
             onDelete={() => onDeleteSwimlane(swimlane.id)}
@@ -64,11 +65,13 @@ export function LeftSidebar({
 
 function SwimlaneLabel({
   swimlane,
+  height,
   onAddItem,
   onUpdate,
   onDelete,
 }: {
   swimlane: Swimlane
+  height: number
   onAddItem: () => void
   onUpdate: (s: Swimlane) => void
   onDelete: () => void
@@ -79,7 +82,7 @@ function SwimlaneLabel({
   return (
     <div
       className="group flex items-center justify-between border-b border-border px-3"
-      style={{ height: SWIMLANE_HEIGHT, backgroundColor: swimlane.color }}
+      style={{ height, backgroundColor: swimlane.color }}
     >
       <div className="flex items-center gap-2 overflow-hidden">
         {isEditing ? (
