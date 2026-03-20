@@ -89,11 +89,29 @@ export function computeSwimlaneLayout(
   for (const parent of sorted) {
     const row = parentRowAssignment.get(parent.id)!
     const subs = subItemsByParent.get(parent.id) ?? []
-    const subBandHeight =
-      subs.length > 0 ? SUB_ITEM_GAP + SUB_ITEM_HEIGHT : 0
-    const totalItemHeight = ITEM_HEIGHT + subBandHeight
-    if (totalItemHeight > rowHeights[row]) {
-      rowHeights[row] = totalItemHeight
+    if (subs.length > 0) {
+      // Pre-compute how many sub-rows this parent's sub-items will need
+      const subSorted = [...subs].sort(
+        (a, b) => a.startDate.getTime() - b.startDate.getTime()
+      )
+      const subRowEndsPre: number[] = []
+      for (const sub of subSorted) {
+        const subLeft = dateToPixel(sub.startDate, timelineStart, zoom)
+        const subRight = dateToPixel(sub.endDate, timelineStart, zoom)
+        const subWidth = Math.max(subRight - subLeft, 16)
+        let sr = -1
+        for (let r = 0; r < subRowEndsPre.length; r++) {
+          if (subLeft >= subRowEndsPre[r] + 2) { sr = r; break }
+        }
+        if (sr === -1) { sr = subRowEndsPre.length; subRowEndsPre.push(0) }
+        subRowEndsPre[sr] = subLeft + subWidth
+      }
+      const subRowCount = subRowEndsPre.length
+      const subBandHeight = SUB_ITEM_GAP + subRowCount * SUB_ITEM_HEIGHT + (subRowCount - 1) * SUB_ITEM_GAP
+      const totalItemHeight = ITEM_HEIGHT + subBandHeight
+      if (totalItemHeight > rowHeights[row]) {
+        rowHeights[row] = totalItemHeight
+      }
     }
   }
 
@@ -124,17 +142,46 @@ export function computeSwimlaneLayout(
       isSubItem: false,
     })
 
-    // Place sub-items below parent
+    // Place sub-items below parent with greedy row stacking
     const subs = subItemsByParent.get(parent.id) ?? []
     if (subs.length > 0) {
       const sortedSubs = [...subs].sort(
         (a, b) => a.startDate.getTime() - b.startDate.getTime()
       )
-      const subTop = top + ITEM_HEIGHT + SUB_ITEM_GAP
+      const subBaseTop = top + ITEM_HEIGHT + SUB_ITEM_GAP
+
+      // Greedy row assignment for sub-items (same approach as parents)
+      const subRowEnds: number[] = []
+      const subRowAssignments: number[] = []
+
       for (const sub of sortedSubs) {
         const subLeft = dateToPixel(sub.startDate, timelineStart, zoom)
         const subRight = dateToPixel(sub.endDate, timelineStart, zoom)
         const subWidth = Math.max(subRight - subLeft, 16)
+
+        let assignedSubRow = -1
+        for (let r = 0; r < subRowEnds.length; r++) {
+          if (subLeft >= subRowEnds[r] + 2) {
+            assignedSubRow = r
+            break
+          }
+        }
+        if (assignedSubRow === -1) {
+          assignedSubRow = subRowEnds.length
+          subRowEnds.push(0)
+        }
+        subRowEnds[assignedSubRow] = subLeft + subWidth
+        subRowAssignments.push(assignedSubRow)
+      }
+
+      for (let si = 0; si < sortedSubs.length; si++) {
+        const sub = sortedSubs[si]
+        const subLeft = dateToPixel(sub.startDate, timelineStart, zoom)
+        const subRight = dateToPixel(sub.endDate, timelineStart, zoom)
+        const subWidth = Math.max(subRight - subLeft, 16)
+        const subRow = subRowAssignments[si]
+        const subTop = subBaseTop + subRow * (SUB_ITEM_HEIGHT + SUB_ITEM_GAP)
+
         layoutItems.push({
           item: sub,
           left: subLeft,
