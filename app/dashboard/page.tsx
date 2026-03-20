@@ -96,25 +96,25 @@ export default function DashboardPage() {
             {roadmaps.map((rm) => (
               <div
                 key={rm.id}
-                role="button"
+                className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 tabIndex={0}
                 onClick={() => router.push(`/roadmap/${rm.id}`)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/roadmap/${rm.id}`) }}
-                className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <Map className="h-5 w-5 text-primary" />
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
                     onClick={(e) => handleDelete(e, rm.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); handleDelete(e as unknown as React.MouseEvent, rm.id) } }}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                     <span className="sr-only">Delete roadmap</span>
-                  </Button>
+                  </div>
                 </div>
                 <h3 className="mt-3 text-base font-semibold text-foreground">
                   {rm.title}
