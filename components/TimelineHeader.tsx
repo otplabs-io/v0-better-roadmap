@@ -46,45 +46,100 @@ export function TimelineHeader({
   }
 
   const handleExport = async () => {
-    if (!canvasRef.current) return
-    const { default: html2canvas } = await import("html2canvas")
+    const node = canvasRef.current
+    if (!node) return
+    try {
+      // Neither html2canvas nor dom-to-image-more can handle oklab/oklch from
+      // Tailwind v4. We bypass all CSS-parsing libraries entirely and render
+      // using the browser's native foreignObject SVG → canvas pipeline.
+      // Before serializing we walk every element and inline all computed color
+      // properties as plain rgb() so no library ever sees oklab.
 
-    // html2canvas doesn't support oklch/lab CSS color functions.
-    // We use onclone to replace all CSS custom properties with resolved hex
-    // equivalents before the snapshot is taken.
-    const hexVars: Record<string, string> = {
-      "--background": "#f9f9fb",
-      "--foreground": "#1a1a2e",
-      "--card": "#ffffff",
-      "--card-foreground": "#1a1a2e",
-      "--border": "#e5e5ed",
-      "--muted": "#f2f2f6",
-      "--muted-foreground": "#6b7280",
-      "--primary": "#3b6fcf",
-      "--primary-foreground": "#ffffff",
-      "--secondary": "#f2f2f6",
-      "--secondary-foreground": "#2a2a40",
-      "--accent": "#eaeaf2",
-      "--accent-foreground": "#2a2a40",
+      const COLOR_PROPS = [
+        "color", "background-color", "border-color", "border-top-color",
+        "border-right-color", "border-bottom-color", "border-left-color",
+        "outline-color", "text-decoration-color", "fill", "stroke",
+      ]
+
+      // Use a 1×1 canvas to convert any color string → sRGB rgb(r,g,b)
+      const cvs = document.createElement("canvas")
+      cvs.width = cvs.height = 1
+      const ctx = cvs.getContext("2d")!
+
+      function toRgb(color: string): string {
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+        return a < 255 ? `rgba(${r},${g},${b},${(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`
+      }
+
+      // Deep clone the target node
+      const clone = node.cloneNode(true) as HTMLElement
+      clone.style.position = "fixed"
+      clone.style.top = "-9999px"
+      clone.style.left = "-9999px"
+      document.body.appendChild(clone)
+
+      // Walk every element in the clone, mirror computed styles from the
+      // original, and convert color values to rgb().
+      const origEls = Array.from(node.querySelectorAll("*")) as HTMLElement[]
+      const cloneEls = Array.from(clone.querySelectorAll("*")) as HTMLElement[]
+
+      origEls.forEach((orig, i) => {
+        const cl = cloneEls[i]
+        if (!cl) return
+        const cs = getComputedStyle(orig)
+        // Copy all computed styles as inline
+        cl.setAttribute("style", cs.cssText)
+        // Now overwrite every color property with a safe rgb() value
+        for (const prop of COLOR_PROPS) {
+          const val = cs.getPropertyValue(prop).trim()
+          if (val && val !== "none" && val !== "transparent") {
+            try { cl.style.setProperty(prop, toRgb(val)) } catch { /* skip */ }
+          }
+        }
+        // Also fix background shorthand
+        const bg = cs.getPropertyValue("background-color").trim()
+        if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") {
+          cl.style.backgroundColor = toRgb(bg)
+        }
+      })
+
+      // Serialize to SVG foreignObject and draw onto a canvas
+      const { width, height } = node.getBoundingClientRect()
+      const scale = 2
+      const xml = new XMLSerializer().serializeToString(clone)
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml">${xml}</div>
+          </foreignObject>
+        </svg>`
+
+      document.body.removeChild(clone)
+
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const img = new Image()
+      img.onload = () => {
+        const out = document.createElement("canvas")
+        out.width = width * scale
+        out.height = height * scale
+        const outCtx = out.getContext("2d")!
+        outCtx.scale(scale, scale)
+        outCtx.drawImage(img, 0, 0)
+        URL.revokeObjectURL(url)
+        const link = document.createElement("a")
+        link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
+        link.href = out.toDataURL("image/png")
+        link.click()
+      }
+      img.onerror = (e) => { URL.revokeObjectURL(url); console.error("[v0] SVG load error", e) }
+      img.src = url
+    } catch (err) {
+      console.error("[v0] Export PNG failed:", err)
     }
-
-    const canvas = await html2canvas(canvasRef.current, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      useCORS: true,
-      onclone: (_doc, el) => {
-        // Apply plain hex vars to the cloned root so html2canvas sees no oklch
-        const root = el.ownerDocument.documentElement
-        Object.entries(hexVars).forEach(([k, v]) => {
-          root.style.setProperty(k, v)
-        })
-      },
-    })
-
-    const link = document.createElement("a")
-    link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
-    link.href = canvas.toDataURL("image/png")
-    link.click()
   }
 
   return (
