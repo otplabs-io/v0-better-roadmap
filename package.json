@@ -45,6 +45,7 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.6.0",
     "html2canvas": "^1.4.1",
+    "dom-to-image-more": "^3.4.1",
     "@supabase/supabase-js": "^2.49.1",
     "@supabase/ssr": "^0.6.1",
     "input-otp": "1.4.2",
