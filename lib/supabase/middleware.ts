@@ -41,8 +41,8 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // No route protection yet -- auth will be added later.
-  // The getUser() call above is still needed to refresh session tokens.
+  // Auth protection will be added later when user accounts are implemented.
+  // For now, just refresh the session.
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:
