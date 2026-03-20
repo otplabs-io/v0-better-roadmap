@@ -48,10 +48,39 @@ export function TimelineHeader({
   const handleExport = async () => {
     if (!canvasRef.current) return
     const { default: html2canvas } = await import("html2canvas")
+
+    // html2canvas doesn't support oklch/lab CSS color functions.
+    // We use onclone to replace all CSS custom properties with resolved hex
+    // equivalents before the snapshot is taken.
+    const hexVars: Record<string, string> = {
+      "--background": "#f9f9fb",
+      "--foreground": "#1a1a2e",
+      "--card": "#ffffff",
+      "--card-foreground": "#1a1a2e",
+      "--border": "#e5e5ed",
+      "--muted": "#f2f2f6",
+      "--muted-foreground": "#6b7280",
+      "--primary": "#3b6fcf",
+      "--primary-foreground": "#ffffff",
+      "--secondary": "#f2f2f6",
+      "--secondary-foreground": "#2a2a40",
+      "--accent": "#eaeaf2",
+      "--accent-foreground": "#2a2a40",
+    }
+
     const canvas = await html2canvas(canvasRef.current, {
       backgroundColor: "#ffffff",
       scale: 2,
+      useCORS: true,
+      onclone: (_doc, el) => {
+        // Apply plain hex vars to the cloned root so html2canvas sees no oklch
+        const root = el.ownerDocument.documentElement
+        Object.entries(hexVars).forEach(([k, v]) => {
+          root.style.setProperty(k, v)
+        })
+      },
     })
+
     const link = document.createElement("a")
     link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
     link.href = canvas.toDataURL("image/png")
