@@ -193,16 +193,6 @@ export function RoadmapContainer() {
 
   const showRightPanel = selectedItem !== null || selectedMilestone !== null
 
-  console.log("[v0] RoadmapContainer rendering", {
-    swimlanes: roadmap.swimlanes.length,
-    items: roadmap.items.length,
-    milestones: roadmap.milestones.length,
-    swimlaneHeights,
-    zoom,
-    startDate: roadmap.startDate.toISOString(),
-    endDate: roadmap.endDate.toISOString(),
-  })
-
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <TimelineHeader

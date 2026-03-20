@@ -3,7 +3,7 @@
 import { useState, type RefObject } from "react"
 import type { ZoomLevel } from "@/types/roadmap"
 import { Button } from "@/components/ui/button"
-import { ZoomIn, ZoomOut, Plus, Download, Milestone } from "lucide-react"
+import { ZoomIn, ZoomOut, Plus, Download, Flag } from "lucide-react"
 import { ZOOM_CONFIG } from "@/lib/timelineUtils"
 
 interface TimelineHeaderProps {
@@ -59,7 +59,7 @@ export function TimelineHeader({
     <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-          <Milestone className="h-4 w-4 text-primary-foreground" />
+          <Flag className="h-4 w-4 text-primary-foreground" />
         </div>
         {isEditing ? (
           <input
