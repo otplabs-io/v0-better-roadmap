@@ -25,8 +25,8 @@ export interface SwimlaneLayout {
 
 /**
  * Compute stacked vertical positions for items in a given swimlane.
- * Parent items are stacked so overlapping ones don't collide.
- * Sub-items are placed inside their parent's vertical band but below the parent bar.
+ * Parent items are assigned to rows so overlapping ones don't collide.
+ * Sub-items are placed directly below their parent bar.
  */
 export function computeSwimlaneLayout(
   allItems: RoadmapItem[],
@@ -46,47 +46,74 @@ export function computeSwimlaneLayout(
     }
   }
 
-  // Sort parents by start date, then by duration (longer first)
+  // Sort parents by start date
   const sorted = [...parentItems].sort((a, b) => {
     const diff = a.startDate.getTime() - b.startDate.getTime()
     if (diff !== 0) return diff
-    return (b.endDate.getTime() - b.startDate.getTime()) - (a.endDate.getTime() - a.startDate.getTime())
+    return (
+      b.endDate.getTime() -
+      b.startDate.getTime() -
+      (a.endDate.getTime() - a.startDate.getTime())
+    )
   })
 
-  // Greedy row assignment for parents: each "row" tracks the rightmost pixel used
-  const rows: number[] = [] // each entry is the right-edge pixel of the last item placed in that row
-  const parentRow: Map<string, number> = new Map()
-  const layoutItems: LayoutItem[] = []
+  // Greedy row assignment: each row tracks the rightmost pixel edge used
+  const rowEnds: number[] = []
+  const parentRowAssignment = new Map<string, number>()
 
   for (const parent of sorted) {
     const left = dateToPixel(parent.startDate, timelineStart, zoom)
     const right = dateToPixel(parent.endDate, timelineStart, zoom)
     const width = Math.max(right - left, 20)
 
-    // Find first row where this item doesn't overlap
     let assignedRow = -1
-    for (let r = 0; r < rows.length; r++) {
-      if (left >= rows[r] + 4) {
+    for (let r = 0; r < rowEnds.length; r++) {
+      if (left >= rowEnds[r] + 4) {
         assignedRow = r
         break
       }
     }
     if (assignedRow === -1) {
-      assignedRow = rows.length
-      rows.push(0)
+      assignedRow = rowEnds.length
+      rowEnds.push(0)
     }
-    rows[assignedRow] = left + width
+    rowEnds[assignedRow] = left + width
+    parentRowAssignment.set(parent.id, assignedRow)
+  }
 
-    // Calculate how many sub-items this parent has
+  // Now compute the vertical offset for each row.
+  // Each row's height = ITEM_HEIGHT + max sub-item band height for any item in that row.
+  const rowCount = rowEnds.length
+  const rowHeights: number[] = new Array(rowCount).fill(ITEM_HEIGHT)
+
+  for (const parent of sorted) {
+    const row = parentRowAssignment.get(parent.id)!
     const subs = subItemsByParent.get(parent.id) ?? []
-    const subRows = subs.length > 0 ? 1 : 0 // sub-items in a single sub-row for now
+    const subBandHeight =
+      subs.length > 0 ? SUB_ITEM_GAP + SUB_ITEM_HEIGHT : 0
+    const totalItemHeight = ITEM_HEIGHT + subBandHeight
+    if (totalItemHeight > rowHeights[row]) {
+      rowHeights[row] = totalItemHeight
+    }
+  }
 
-    parentRow.set(parent.id, assignedRow)
+  // Compute cumulative row offsets
+  const rowTops: number[] = []
+  let acc = LANE_PADDING_TOP
+  for (let r = 0; r < rowCount; r++) {
+    rowTops.push(acc)
+    acc += rowHeights[r] + ITEM_GAP
+  }
 
-    // Parent top position
-    // Each parent "slot" height = ITEM_HEIGHT + (subRows * (SUB_ITEM_HEIGHT + SUB_ITEM_GAP))
-    const slotsBefore = computeSlotOffset(sorted, parentRow, subItemsByParent, assignedRow, parent.id)
-    const top = LANE_PADDING_TOP + slotsBefore
+  // Build layout items
+  const layoutItems: LayoutItem[] = []
+
+  for (const parent of sorted) {
+    const row = parentRowAssignment.get(parent.id)!
+    const left = dateToPixel(parent.startDate, timelineStart, zoom)
+    const right = dateToPixel(parent.endDate, timelineStart, zoom)
+    const width = Math.max(right - left, 20)
+    const top = rowTops[row]
 
     layoutItems.push({
       item: parent,
@@ -97,7 +124,8 @@ export function computeSwimlaneLayout(
       isSubItem: false,
     })
 
-    // Place sub-items below parent within the same horizontal span
+    // Place sub-items below parent
+    const subs = subItemsByParent.get(parent.id) ?? []
     if (subs.length > 0) {
       const sortedSubs = [...subs].sort(
         (a, b) => a.startDate.getTime() - b.startDate.getTime()
@@ -119,7 +147,7 @@ export function computeSwimlaneLayout(
     }
   }
 
-  // Compute total swimlane height
+  // Total lane height
   let maxBottom = 0
   for (const li of layoutItems) {
     const bottom = li.top + li.height
@@ -132,28 +160,4 @@ export function computeSwimlaneLayout(
     height: totalHeight,
     items: layoutItems,
   }
-}
-
-/**
- * Compute the vertical pixel offset for items stacked before the given item
- * in the same row.
- */
-function computeSlotOffset(
-  sorted: RoadmapItem[],
-  parentRow: Map<string, number>,
-  subItemsByParent: Map<string, RoadmapItem[]>,
-  targetRow: number,
-  stopAtId: string
-): number {
-  let offset = 0
-  for (const item of sorted) {
-    if (item.id === stopAtId) break
-    const row = parentRow.get(item.id)
-    if (row === targetRow) {
-      const subs = subItemsByParent.get(item.id) ?? []
-      const subHeight = subs.length > 0 ? SUB_ITEM_HEIGHT + SUB_ITEM_GAP : 0
-      offset += ITEM_HEIGHT + subHeight + ITEM_GAP
-    }
-  }
-  return offset
 }

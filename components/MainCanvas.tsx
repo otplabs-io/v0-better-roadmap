@@ -59,6 +59,13 @@ export const MainCanvas = forwardRef<HTMLDivElement, MainCanvasProps>(
       return swimlaneLayouts.reduce((sum, l) => sum + l.height, 0)
     }, [swimlaneLayouts])
 
+    console.log("[v0] MainCanvas rendering", {
+      timelineWidth,
+      gridLinesCount: gridLines.length,
+      swimlaneLayouts: swimlaneLayouts.map(l => ({ id: l.swimlaneId, height: l.height, itemCount: l.items.length })),
+      totalHeight,
+    })
+
     const handleBackgroundClick = useCallback(
       (e: React.MouseEvent) => {
         if (e.target === e.currentTarget) {
