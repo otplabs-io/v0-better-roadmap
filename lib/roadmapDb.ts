@@ -102,11 +102,17 @@ export async function listRoadmaps(): Promise<
  */
 export async function createRoadmap(): Promise<string | null> {
   const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
   const year = new Date().getFullYear()
 
   const { data: rm, error } = await supabase
     .from("roadmaps")
     .insert({
+      user_id: user.id,
       title: "Untitled Roadmap",
       start_date: `${year}-01-01`,
       end_date: `${year}-12-31`,

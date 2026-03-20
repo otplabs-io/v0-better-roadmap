@@ -1,134 +1,101 @@
-"use client"
-
-import { useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { listRoadmaps, createRoadmap, deleteRoadmap } from "@/lib/roadmapDb"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Plus, Trash2, Map, Calendar } from "lucide-react"
-import { format } from "date-fns"
+import { Map, ArrowRight, BarChart3, Layers, Download } from "lucide-react"
 
-interface RoadmapSummary {
-  id: string
-  title: string
-  startDate: Date
-  endDate: Date
-  createdAt: Date
-}
-
-export default function DashboardPage() {
-  const router = useRouter()
-  const [roadmaps, setRoadmaps] = useState<RoadmapSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
-
-  useEffect(() => {
-    listRoadmaps().then((data) => {
-      setRoadmaps(data)
-      setLoading(false)
-    })
-  }, [])
-
-  const handleCreate = useCallback(async () => {
-    setCreating(true)
-    const id = await createRoadmap()
-    if (id) {
-      router.push(`/roadmap/${id}`)
-    }
-    setCreating(false)
-  }, [router])
-
-  const handleDelete = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    const confirmed = window.confirm("Are you sure you want to delete this roadmap?")
-    if (!confirmed) return
-    const ok = await deleteRoadmap(id)
-    if (ok) {
-      setRoadmaps((prev) => prev.filter((r) => r.id !== id))
-    }
-  }, [])
-
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
+      {/* Header */}
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <Map className="h-5 w-5 text-primary-foreground" />
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <Map className="h-4 w-4 text-primary-foreground" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Better Roadmap</h1>
-              <p className="text-sm text-muted-foreground">Visual roadmap planner</p>
-            </div>
+            <span className="text-lg font-bold text-foreground">Better Roadmap</span>
           </div>
-          <Button onClick={handleCreate} disabled={creating} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            {creating ? "Creating..." : "New Roadmap"}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" asChild>
+              <Link href="/auth/login">Sign in</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/auth/sign-up">Get started</Link>
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-            <p className="mt-3 text-sm text-muted-foreground">Loading roadmaps...</p>
-          </div>
-        ) : roadmaps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-20">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-              <Map className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold text-foreground">No roadmaps yet</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create your first roadmap to get started.
-            </p>
-            <Button onClick={handleCreate} disabled={creating} className="mt-6 gap-1.5">
-              <Plus className="h-4 w-4" />
-              {creating ? "Creating..." : "Create Roadmap"}
+      {/* Hero */}
+      <main className="flex flex-1 flex-col">
+        <section className="mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center">
+          <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            Plan your product roadmap visually
+          </h1>
+          <p className="mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
+            Better Roadmap gives product managers a drag-and-drop timeline to organize
+            features, track progress, and share plans with stakeholders -- all in
+            one place.
+          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <Button size="lg" asChild>
+              <Link href="/auth/sign-up" className="gap-2">
+                Create free account
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/auth/login">Sign in</Link>
             </Button>
           </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {roadmaps.map((rm) => (
-              <div
-                key={rm.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => router.push(`/roadmap/${rm.id}`)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/roadmap/${rm.id}`) }}
-                className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <Map className="h-5 w-5 text-primary" />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={(e) => handleDelete(e, rm.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                    <span className="sr-only">Delete roadmap</span>
-                  </Button>
-                </div>
-                <h3 className="mt-3 text-base font-semibold text-foreground">
-                  {rm.title}
-                </h3>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>
-                    {format(rm.startDate, "MMM yyyy")} - {format(rm.endDate, "MMM yyyy")}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground/60">
-                  Created {format(rm.createdAt, "MMM d, yyyy")}
-                </p>
+        </section>
+
+        {/* Features */}
+        <section className="border-t border-border bg-card">
+          <div className="mx-auto grid max-w-5xl gap-8 px-6 py-16 sm:grid-cols-3">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                <Layers className="h-6 w-6 text-primary" />
               </div>
-            ))}
+              <h3 className="mt-4 text-base font-semibold text-foreground">
+                Swimlanes
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Organize work by team, theme, or category with customizable
+                swimlanes that keep your roadmap clear.
+              </p>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                <BarChart3 className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="mt-4 text-base font-semibold text-foreground">
+                Track progress
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Set status, assign owners, and track percent completion for every
+                item and sub-task on your roadmap.
+              </p>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                <Download className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="mt-4 text-base font-semibold text-foreground">
+                Export to PNG
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Share your roadmap with anyone by exporting a polished PNG image
+                at the click of a button.
+              </p>
+            </div>
           </div>
-        )}
+        </section>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+        Better Roadmap
+      </footer>
     </div>
   )
 }
