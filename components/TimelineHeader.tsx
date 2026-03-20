@@ -47,44 +47,53 @@ export function TimelineHeader({
 
   const handleExport = async () => {
     if (!canvasRef.current) return
-    const { default: html2canvas } = await import("html2canvas")
+    try {
+      const { default: html2canvas } = await import("html2canvas")
 
-    // html2canvas doesn't support oklch/lab CSS color functions.
-    // We use onclone to replace all CSS custom properties with resolved hex
-    // equivalents before the snapshot is taken.
-    const hexVars: Record<string, string> = {
-      "--background": "#faf8f5",
-      "--foreground": "#1a1a1a",
-      "--card": "#ffffff",
-      "--card-foreground": "#1a1a1a",
-      "--border": "#e2ddd8",
-      "--muted": "#f2ede8",
-      "--muted-foreground": "#6b6460",
-      "--primary": "#f96302",
-      "--primary-foreground": "#ffffff",
-      "--secondary": "#f2ede8",
-      "--secondary-foreground": "#1a1a1a",
-      "--accent": "#fde8d5",
-      "--accent-foreground": "#1a1a1a",
+      // html2canvas can't parse modern CSS color functions (oklch, lab, etc).
+      // Snapshot computed colors from the live DOM first, then override via onclone.
+      const liveRoot = document.documentElement
+      const cssVarNames = [
+        "--background", "--foreground", "--card", "--card-foreground",
+        "--border", "--muted", "--muted-foreground", "--primary",
+        "--primary-foreground", "--secondary", "--secondary-foreground",
+        "--accent", "--accent-foreground", "--ring",
+      ]
+
+      // Resolve each var to its computed value as a plain sRGB hex using canvas
+      const resolvedVars: Record<string, string> = {}
+      const tmpCanvas = document.createElement("canvas")
+      tmpCanvas.width = 1; tmpCanvas.height = 1
+      const ctx = tmpCanvas.getContext("2d")!
+      for (const v of cssVarNames) {
+        const raw = getComputedStyle(liveRoot).getPropertyValue(v).trim()
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = raw
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+        resolvedVars[v] = `rgb(${r},${g},${b})`
+        console.log("[v0] resolved", v, raw, "->", resolvedVars[v])
+      }
+
+      const canvas = await html2canvas(canvasRef.current, {
+        backgroundColor: resolvedVars["--background"] ?? "#ffffff",
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+          const root = clonedDoc.documentElement
+          for (const [k, v] of Object.entries(resolvedVars)) {
+            root.style.setProperty(k, v)
+          }
+        },
+      })
+
+      const link = document.createElement("a")
+      link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
+      link.href = canvas.toDataURL("image/png")
+      link.click()
+    } catch (err) {
+      console.error("[v0] Export PNG failed:", err)
     }
-
-    const canvas = await html2canvas(canvasRef.current, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      useCORS: true,
-      onclone: (_doc, el) => {
-        // Apply plain hex vars to the cloned root so html2canvas sees no oklch
-        const root = el.ownerDocument.documentElement
-        Object.entries(hexVars).forEach(([k, v]) => {
-          root.style.setProperty(k, v)
-        })
-      },
-    })
-
-    const link = document.createElement("a")
-    link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
-    link.href = canvas.toDataURL("image/png")
-    link.click()
   }
 
   return (
