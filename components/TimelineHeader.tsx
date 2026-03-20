@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, type RefObject } from "react"
-import type { ZoomLevel } from "@/types/roadmap"
+import type { ZoomLevel, Roadmap } from "@/types/roadmap"
 import { Button } from "@/components/ui/button"
-import { ZoomIn, ZoomOut, Plus, Download, Flag } from "lucide-react"
+import { ZoomIn, ZoomOut, Plus, Download } from "lucide-react"
 import { ZOOM_CONFIG } from "@/lib/timelineUtils"
 import { UserMenu } from "@/components/UserMenu"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { exportRoadmapToCanvas } from "@/lib/exportCanvas"
 
 interface TimelineHeaderProps {
   title: string
@@ -16,6 +17,7 @@ interface TimelineHeaderProps {
   onZoomChange: (zoom: ZoomLevel) => void
   onAddMilestone: () => void
   canvasRef: RefObject<HTMLDivElement | null>
+  roadmap: Roadmap | null
 }
 
 const ZOOM_ORDER: ZoomLevel[] = ["quarterly", "monthly", "weekly"]
@@ -26,7 +28,7 @@ export function TimelineHeader({
   zoom,
   onZoomChange,
   onAddMilestone,
-  canvasRef,
+  roadmap,
 }: TimelineHeaderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(title)
@@ -45,98 +47,16 @@ export function TimelineHeader({
     }
   }
 
-  const handleExport = async () => {
-    const node = canvasRef.current
-    if (!node) return
+  const handleExport = () => {
+    if (!roadmap) return
     try {
-      // Neither html2canvas nor dom-to-image-more can handle oklab/oklch from
-      // Tailwind v4. We bypass all CSS-parsing libraries entirely and render
-      // using the browser's native foreignObject SVG → canvas pipeline.
-      // Before serializing we walk every element and inline all computed color
-      // properties as plain rgb() so no library ever sees oklab.
-
-      const COLOR_PROPS = [
-        "color", "background-color", "border-color", "border-top-color",
-        "border-right-color", "border-bottom-color", "border-left-color",
-        "outline-color", "text-decoration-color", "fill", "stroke",
-      ]
-
-      // Use a 1×1 canvas to convert any color string → sRGB rgb(r,g,b)
-      const cvs = document.createElement("canvas")
-      cvs.width = cvs.height = 1
-      const ctx = cvs.getContext("2d")!
-
-      function toRgb(color: string): string {
-        ctx.clearRect(0, 0, 1, 1)
-        ctx.fillStyle = color
-        ctx.fillRect(0, 0, 1, 1)
-        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
-        return a < 255 ? `rgba(${r},${g},${b},${(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`
-      }
-
-      // Deep clone the target node
-      const clone = node.cloneNode(true) as HTMLElement
-      clone.style.position = "fixed"
-      clone.style.top = "-9999px"
-      clone.style.left = "-9999px"
-      document.body.appendChild(clone)
-
-      // Walk every element in the clone, mirror computed styles from the
-      // original, and convert color values to rgb().
-      const origEls = Array.from(node.querySelectorAll("*")) as HTMLElement[]
-      const cloneEls = Array.from(clone.querySelectorAll("*")) as HTMLElement[]
-
-      origEls.forEach((orig, i) => {
-        const cl = cloneEls[i]
-        if (!cl) return
-        const cs = getComputedStyle(orig)
-        // Copy all computed styles as inline
-        cl.setAttribute("style", cs.cssText)
-        // Now overwrite every color property with a safe rgb() value
-        for (const prop of COLOR_PROPS) {
-          const val = cs.getPropertyValue(prop).trim()
-          if (val && val !== "none" && val !== "transparent") {
-            try { cl.style.setProperty(prop, toRgb(val)) } catch { /* skip */ }
-          }
-        }
-        // Also fix background shorthand
-        const bg = cs.getPropertyValue("background-color").trim()
-        if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") {
-          cl.style.backgroundColor = toRgb(bg)
-        }
-      })
-
-      // Serialize to SVG foreignObject and draw onto a canvas
-      const { width, height } = node.getBoundingClientRect()
-      const scale = 2
-      const xml = new XMLSerializer().serializeToString(clone)
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-          <foreignObject width="100%" height="100%">
-            <div xmlns="http://www.w3.org/1999/xhtml">${xml}</div>
-          </foreignObject>
-        </svg>`
-
-      document.body.removeChild(clone)
-
-      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" })
-      const url = URL.createObjectURL(blob)
-      const img = new Image()
-      img.onload = () => {
-        const out = document.createElement("canvas")
-        out.width = width * scale
-        out.height = height * scale
-        const outCtx = out.getContext("2d")!
-        outCtx.scale(scale, scale)
-        outCtx.drawImage(img, 0, 0)
-        URL.revokeObjectURL(url)
-        const link = document.createElement("a")
-        link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
-        link.href = out.toDataURL("image/png")
-        link.click()
-      }
-      img.onerror = (e) => { URL.revokeObjectURL(url); console.error("[v0] SVG load error", e) }
-      img.src = url
+      // Render directly to canvas via Canvas 2D API — no DOM snapshot,
+      // no cross-origin fonts, no third-party CSS parsers.
+      const canvas = exportRoadmapToCanvas(roadmap, zoom)
+      const link = document.createElement("a")
+      link.download = `${title.replace(/\s+/g, "-").toLowerCase()}-roadmap.png`
+      link.href = canvas.toDataURL("image/png")
+      link.click()
     } catch (err) {
       console.error("[v0] Export PNG failed:", err)
     }
