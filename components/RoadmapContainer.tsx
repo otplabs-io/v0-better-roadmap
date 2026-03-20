@@ -320,6 +320,7 @@ export function RoadmapContainer({ roadmapId }: RoadmapContainerProps) {
         onZoomChange={setZoom}
         onAddMilestone={handleAddMilestone}
         canvasRef={canvasRef}
+        roadmap={roadmap}
       />
       <div className="flex flex-1 overflow-hidden">
         <LeftSidebar
