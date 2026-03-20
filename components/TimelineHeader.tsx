@@ -53,19 +53,19 @@ export function TimelineHeader({
     // We use onclone to replace all CSS custom properties with resolved hex
     // equivalents before the snapshot is taken.
     const hexVars: Record<string, string> = {
-      "--background": "#f9f9fb",
-      "--foreground": "#1a1a2e",
+      "--background": "#faf8f5",
+      "--foreground": "#1a1a1a",
       "--card": "#ffffff",
-      "--card-foreground": "#1a1a2e",
-      "--border": "#e5e5ed",
-      "--muted": "#f2f2f6",
-      "--muted-foreground": "#6b7280",
-      "--primary": "#3b6fcf",
+      "--card-foreground": "#1a1a1a",
+      "--border": "#e2ddd8",
+      "--muted": "#f2ede8",
+      "--muted-foreground": "#6b6460",
+      "--primary": "#f96302",
       "--primary-foreground": "#ffffff",
-      "--secondary": "#f2f2f6",
-      "--secondary-foreground": "#2a2a40",
-      "--accent": "#eaeaf2",
-      "--accent-foreground": "#2a2a40",
+      "--secondary": "#f2ede8",
+      "--secondary-foreground": "#1a1a1a",
+      "--accent": "#fde8d5",
+      "--accent-foreground": "#1a1a1a",
     }
 
     const canvas = await html2canvas(canvasRef.current, {
