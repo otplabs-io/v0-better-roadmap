@@ -90,10 +90,13 @@ export default function DashboardPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {roadmaps.map((rm) => (
-              <button
+              <div
                 key={rm.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => router.push(`/roadmap/${rm.id}`)}
-                className="group relative flex flex-col rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:shadow-md"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/roadmap/${rm.id}`) }}
+                className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -121,7 +124,7 @@ export default function DashboardPage() {
                 <p className="mt-1 text-[11px] text-muted-foreground/60">
                   Created {format(rm.createdAt, "MMM d, yyyy")}
                 </p>
-              </button>
+              </div>
             ))}
           </div>
         )}
