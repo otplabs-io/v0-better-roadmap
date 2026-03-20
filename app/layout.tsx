@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'Better Roadmap - Visual Roadmap Planner',
+  description: 'A visual roadmap planner for product managers. Drag, resize, and organize your product roadmap with swimlanes, milestones, and export to PNG.',
   generator: 'v0.app',
   icons: {
     icon: [
